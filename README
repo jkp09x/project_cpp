@@ -1,0 +1,114 @@
+# 📈 Low-Latency C++ Order Book Simulator
+
+A project to master **Modern C++ (C++17/20)**, **Concurrency**, and **Low-Latency System Design**, aimed at developing skills for high-performance engineering roles.
+
+## 🎯 Project Goal
+
+To build a **High-Performance Order Book** that can process market events (orders, cancellations) with minimal latency, moving from a simple, correct, single-threaded design to an optimized, concurrent, and lock-free system.
+
+---
+
+## Phase 1: Foundation (OOP & Data Structures) 🏗️
+
+The focus is on writing **correct** and **clean** C++ code using solid OOP and data structures before any performance optimization.
+
+### 1. Basic Data Structures
+
+| Objective | Detail | Learning Focus |
+| :--- | :--- | :--- |
+| **A. `LimitOrder` Struct** | Define a C++ `struct` to represent a single order. Include fields for: `OrderID` (a unique integer), `Price` (double or a specialized fixed-point type, start with `double`), `Quantity` (integer), `Side` (an `enum class` for `Buy` or `Sell`), and a `Timestamp` (for logging/debugging). | **C++ `enum class`** for strong typing; **Plain Old Data (POD)** structs for memory efficiency. |
+| **B. `OrderBookEntry` Struct** | This will represent one order within a price level. It should contain a reference/pointer to the `LimitOrder` and pointers for the **Doubly Linked List** structure: `prev_order`, `next_order`. | **Linked List** implementation knowledge (crucial for fast insertions/deletions within a level). |
+| **C. `PriceLevel` Class** | A class that manages all orders at a specific price. It should contain a list (using your `OrderBookEntry` structs) and methods to `add_order()` and `remove_order()` from that list. | Basic **OOP Encapsulation** and **Data Structure Management**. |
+
+---
+
+### 2. Order Book Class Implementation
+
+| Objective | Detail | Learning Focus |
+| :--- | :--- | :--- |
+| **A. `OrderBook` Class Structure** | The main class. It needs two primary data members: one for **Bid (Buy) levels** and one for **Ask (Sell) levels**. Use two separate `std::map<double, PriceLevel>` for now. **Maps automatically sort by key (price)**, which is necessary for order books. | **STL Containers** (`std::map`); **Template** review (e.g., using `std::pair` for map iteration). |
+| **B. Core Methods** | Implement `addOrder(LimitOrder order)`, `cancelOrder(OrderID id)`, and `processMarketOrder(Quantity q)`. Focus on how `addOrder` uses the map to find the level, then uses the `PriceLevel`'s methods. | **Method Logic & Flow Control**; handling the complexities of **order matching** (e.g., matching a new Bid against existing Asks). |
+| **C. Order ID Lookup** | Implement a third data structure: a `std::unordered_map<OrderID, OrderBookEntry*>` to quickly find an order being cancelled. | **Time Complexity** (O(1) lookups are necessary for cancellation). |
+
+---
+
+### 3. Testing
+
+| Objective | Detail | Learning Focus |
+| :--- | :--- | :--- |
+| **A. Setup Google Test** | Integrate a simple testing framework (e.g., [Google Test](https://github.com/google/googletest)). | **Build System Integration** (CMake is recommended for C++ projects). |
+| **B. Write Unit Tests** | Create tests to verify: 1) A new buy order is placed correctly on the bid side. 2) A market order correctly crosses the spread and executes against multiple price levels. 3) An order is successfully cancelled and removed from both the price level list and the ID lookup map. | **Test-Driven Development (TDD) Mindset**; ensuring **correctness** is the first priority. |
+
+---
+
+## Phase 2: Performance & Concurrency 🚀
+
+The focus shifts to making the **correct** system **fast** and **thread-safe**.
+
+### 4. Concurrency (Basic Mutex)
+
+| Objective | Detail | Learning Focus |
+| :--- | :--- | :--- |
+| **A. Introduce Mutex** | Add a `std::mutex` data member to your `OrderBook` class. | **`std::mutex`** (The basic locking primitive). |
+| **B. Implement Locking** | Use **`std::lock_guard`** or **`std::unique_lock`** at the very beginning of **every public method** (`addOrder`, `cancelOrder`, `processMarketOrder`). This ensures that only one thread can modify the book at a time (correctness) but introduces contention (performance hit). | **RAII (Resource Acquisition Is Initialization)** principles for safe locking/unlocking. |
+| **C. Simple Multithreading Test** | Write a test that spins up 5 threads, all simultaneously calling `addOrder()` thousands of times. Verify that the final state of the Order Book is still correct (no data corruption). | Understanding **Race Conditions** and how mutual exclusion prevents them. |
+
+---
+
+### 5. Low-Latency Data Structures
+
+| Objective | Detail | Learning Focus |
+| :--- | :--- | :--- |
+| **A. Replace `std::map`** | Replace the two `std::map` containers (for Bid/Ask levels) with a structure that is more **cache-friendly** and faster than a tree-based map. Consider using a **`std::vector`** of price levels combined with a fast hash map for lookup. | Understanding **Cache Locality** (Why contiguous memory is faster) and the difference between **O(log N)** (map) and **O(1)** (hash table/array) performance. |
+| **B. Implement Flat Map** | Find and integrate a "flat map" implementation (or a `std::vector` + `std::sort` for simplicity). A flat map uses a sorted `std::vector<std::pair<Key, Value>>` instead of a tree structure. For small data sets, this can outperform `std::map`. | **Data Structure Trade-offs** (flat map is faster than `std::map` but has higher insertion cost). |
+
+---
+
+### 6. Performance Benchmarking
+
+| Objective | Detail | Learning Focus |
+| :--- | :--- | :--- |
+| **A. Setup Benchmarking** | Integrate a benchmarking library (e.g., [Google Benchmark](https://github.com/google/benchmark)) into your project. | **Benchmarking Toolchain**. |
+| **B. Profile Critical Path** | Write a benchmark test that measures the average latency (in nanoseconds/microseconds) of calling `addOrder()`: 1) In the **Phase 1** version (no mutex, single-threaded). 2) In the **Phase 2, Step 4** version (with the mutex). 3) In the **Phase 2, Step 5** version (with mutex and flat map). | **Quantitative Performance Analysis**; identifying the **Critical Path** (the sequence of operations that take the most time). |
+
+---
+
+## Phase 3: Advanced Optimization & Final Polish ✨
+
+This phase focuses on true high-performance techniques required for $250k+ roles.
+
+### 7. Lock-Free Design (Single Writer/Multiple Reader - SWM R)
+
+| Objective | Detail | Learning Focus |
+| :--- | :--- | :--- |
+| **A. Single Writer Pattern** | Refactor the design to use one dedicated **Input Thread (Writer)** that consumes incoming orders and one dedicated **Processing Thread (Writer/Reader)** that updates the Order Book. | **Thread Topology** and the concept of **Seam** (where the input data meets the processing logic). |
+| **B. Implement Lock-Free Queue** | Replace the explicit mutex with a **Single-Producer, Single-Consumer (SPSC) Lock-Free Queue**. The Input Thread writes to the queue, and the Processing Thread reads from it. This removes the mutex overhead from the critical path. | **`std::atomic`** usage; the challenges and complexity of **Lock-Free Programming** (a key skill). |
+| **C. Update Benchmarks** | Re-run the benchmarks from Step 6 on this new lock-free design and compare the latency improvements over the mutex version. | Validating performance gains through **lock contention removal**. |
+
+
+---
+
+### 8. Custom Memory Management
+
+| Objective | Detail | Learning Focus |
+| :--- | :--- | :--- |
+| **A. Implement Memory Pool** | Since order book entries are constantly being allocated and deallocated, implement a simple **Fixed-Size Object Pool** or **Stack Allocator** to manage the memory for `LimitOrder` and `OrderBookEntry` structs. | Overcoming **non-deterministic latency** caused by general-purpose `malloc`/`free`. **Custom Allocators** (a core low-latency skill). |
+| **B. Integrate Allocator** | Modify the data structures (especially the linked list management in `PriceLevel`) to use your custom allocator instead of `new`/`delete`. | Using placement new (`new(ptr) T(...)`) and manually calling the destructor. |
+
+---
+
+### 9. I/O Simulation
+
+| Objective | Detail | Learning Focus |
+| :--- | :--- | :--- |
+| **A. Market Data Source** | Create a simple `market_data.csv` file with thousands of simulated orders (Price, Quantity, Side, Type). | **File I/O** basics. |
+| **B. Input Thread** | The dedicated Input Thread (from Step 7) should read from this file and parse the data, then immediately push the orders onto the lock-free queue. Focus on using fast C++ I/O (not `std::cin`/`std::cout`). | **Separation of Concerns** (I/O is separated from core processing). |
+
+---
+
+### 10. Final Documentation and Showcase
+
+| Objective | Detail | Learning Focus |
+| :--- | :--- | :--- |
+| **A. Finalize README** | Update this README to summarize your final architecture. Specifically call out the **lock-free queue** and **custom allocator** as key performance features. | **Technical Communication** (Crucial for senior roles—explaining *why* you made a design choice). |
+| **B. Performance Report** | Add a section detailing the performance metrics gathered in Steps 6 and 7. Present a clear table showing the latency difference between the **Mutex** and **Lock-Free** versions. | **Data Presentation** (Demonstrating quantifiable results). |
